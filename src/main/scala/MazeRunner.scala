@@ -1,3 +1,4 @@
+import Exceptions._
 import MazeUtils.{Direction, Maze, Point, Position, Symbol, Tile}
 
 import scala.util.{Failure, Success, Try}
@@ -25,9 +26,9 @@ object MazeRunner {
       .filterNot(_ == Direction.inverse(position.direction))
       .flatMap(d => validSymbolDirection(maze, position.point, d).map(sym => (position.point + d, sym))) match {
       case ::((newPoint, _), next) =>
-        if (next.nonEmpty) throw new Exception("Fork found, must only have one available direction change")
+        if (next.nonEmpty) throw ForkFoundException
         Position(newPoint, position.point - newPoint)
-      case Nil => throw new Exception("No exit found")
+      case Nil => throw NoExitFoundException
     }
   }
 
@@ -43,7 +44,7 @@ object MazeRunner {
             // need to change direction
             val currentSym = maze.path(position.point).value
             if (currentSym != '+' && currentSym != '@' && !('A' to 'Z').contains(currentSym)) {
-              throw new Exception("Illegal path or change of direction")
+              throw IllegalPathChangeException
             }
             val nextPosition = changeDirection(maze, position)
             Tile(nextPosition, maze.path.getOrElse(nextPosition.point, throw new Exception("Failed to change direction")))
@@ -54,11 +55,11 @@ object MazeRunner {
   private def start(maze: Maze): Tile = {
     maze.path.toList.filter(x => x._2.value == '@') match {
       case ::(head, next) =>
-        if (next.nonEmpty) throw new Exception("Too many starts found, must only have one available start")
+        if (next.nonEmpty) throw TooManyStartsException
         val startPos = Position(head._1, Direction.Start)
         val position = changeDirection(maze, startPos)
         Tile(position, maze.path(position.point))
-      case Nil => throw new Exception("No start found")
+      case Nil => throw StartNotFoundException
     }
   }
 
@@ -70,33 +71,28 @@ object MazeRunner {
     var currentDir = Direction.Start
     var currentPoint = Point.fromTuple((0, 0))
     var currentPos = Position(currentPoint, currentDir)
-    Try {
-      do {
-        val nextTile = next(maze, currentPos)
-        val sym = nextTile.symbol
-        maze.path.get(currentPoint) match {
-          case Some(testPoint) =>
-            if (testPoint.value == '+' && nextTile.position.direction == currentDir) {
-              // fake turn, error out
-              throw new Exception(s"Fake turn detected ${nextTile.prettyStr}")
-            }
-          case None =>
-        }
-        strPath += sym.value
-        if (('A' to 'Z').toList.contains(sym.value) && !letterSet.contains(nextTile.position.point)) {
-          letterSet = letterSet ++ Set(nextTile.position.point)
-          letters += sym.value
-        }
-        currentSym = sym
-        currentDir = nextTile.position.direction
-        currentPoint = nextTile.position.point
-        currentPos = Position(currentPoint, currentDir)
+    do {
+      val nextTile = next(maze, currentPos)
+      val sym = nextTile.symbol
+      maze.path.get(currentPoint) match {
+        case Some(testPoint) =>
+          if (testPoint.value == '+' && nextTile.position.direction == currentDir) {
+            // fake turn, error out
+            throw IllegalPathChangeException
+          }
+        case None =>
       }
-      while (currentSym.value != 'x')
-    } match {
-      case Failure(exception) => println(exception.getMessage)
-      case Success(_) =>
+      strPath += sym.value
+      if (('A' to 'Z').toList.contains(sym.value) && !letterSet.contains(nextTile.position.point)) {
+        letterSet = letterSet ++ Set(nextTile.position.point)
+        letters += sym.value
+      }
+      currentSym = sym
+      currentDir = nextTile.position.direction
+      currentPoint = nextTile.position.point
+      currentPos = Position(currentPoint, currentDir)
     }
+    while (currentSym.value != 'x')
     (letters, strPath)
   }
 }

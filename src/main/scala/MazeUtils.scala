@@ -1,3 +1,5 @@
+import Exceptions.IllegalCharException
+
 object MazeUtils {
 
   case class Point(row: Int, col: Int) {
@@ -74,7 +76,7 @@ object MazeUtils {
   object Symbol {
     def fromChar(c: Char) = {
       if ((('A' to 'Z').toList ++ List('+', '-', '|', '@', 'x')).contains(c)) Symbol(c)
-      else throw new Exception("Illegal Char")
+      else throw IllegalCharException(c)
     }
   }
 
