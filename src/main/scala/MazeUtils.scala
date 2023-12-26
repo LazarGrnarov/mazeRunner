@@ -33,6 +33,16 @@ object MazeUtils {
 
   case class Symbol(value: Char) extends AnyVal
 
+  case class Position(point: Point, direction: Direction.Value) {
+    def move = Position(point + direction, direction)
+
+    def prettyStr = s"point[${point.row}, ${point.col}] -> $direction"
+  }
+
+  case class Tile(position: Position, symbol: Symbol) {
+    def prettyStr = s"${position.prettyStr}: $symbol"
+  }
+
   object Direction extends Enumeration {
     val Left, Right, Up, Down, Start = Value
 

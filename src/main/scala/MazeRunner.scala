@@ -1,4 +1,4 @@
-import MazeUtils.{Direction, Maze, Point, Symbol}
+import MazeUtils.{Direction, Maze, Point, Position, Symbol, Tile}
 
 import scala.util.{Failure, Success, Try}
 
@@ -18,45 +18,46 @@ object MazeRunner {
     }
   }
 
-  private def changeDirection(maze: Maze, point: Point, direction: Direction.Value): (Point, Direction.Value) = {
+  private def changeDirection(maze: Maze, position: Position): Position = {
     Direction.values.toList
-      .filterNot(_ == direction)
+      .filterNot(_ == position.direction)
       .filterNot(_ == Direction.Start)
-      .filterNot(_ == Direction.inverse(direction))
-      .flatMap(d => validSymbolDirection(maze, point, d).map(sym => (point + d, sym))) match {
+      .filterNot(_ == Direction.inverse(position.direction))
+      .flatMap(d => validSymbolDirection(maze, position.point, d).map(sym => (position.point + d, sym))) match {
       case ::((newPoint, _), next) =>
         if (next.nonEmpty) throw new Exception("Fork found, must only have one available direction change")
-        (newPoint, point - newPoint)
+        Position(newPoint, position.point - newPoint)
       case Nil => throw new Exception("No exit found")
     }
   }
 
-  private def next(maze: Maze, point: Point, direction: Direction.Value): (Point, Direction.Value, Symbol) = {
-    direction match {
+  private def next(maze: Maze, position: Position): Tile = {
+    position.direction match {
       case Direction.Start =>
         start(maze)
       case _ =>
-        validSymbolDirection(maze, point, direction) match {
+        validSymbolDirection(maze, position.point, position.direction) match {
           case Some(symbol) =>
-            (point + direction, direction, symbol)
+            Tile(position.move, symbol)
           case None =>
             // need to change direction
-            val currentSym = maze.path(point).value
+            val currentSym = maze.path(position.point).value
             if (currentSym != '+' && currentSym != '@' && !('A' to 'Z').contains(currentSym)) {
               throw new Exception("Illegal path or change of direction")
             }
-            val (step, changedDirection) = changeDirection(maze, point, direction)
-            (step, changedDirection, maze.path.getOrElse(step, throw new Exception("Failed to change direction")))
+            val nextPosition = changeDirection(maze, position)
+            Tile(nextPosition, maze.path.getOrElse(nextPosition.point, throw new Exception("Failed to change direction")))
         }
     }
   }
 
-  private def start(maze: Maze): (Point, Direction.Value, Symbol) = {
+  private def start(maze: Maze): Tile = {
     maze.path.toList.filter(x => x._2.value == '@') match {
       case ::(head, next) =>
         if (next.nonEmpty) throw new Exception("Too many starts found, must only have one available start")
-        val (point, direction) = changeDirection(maze, head._1, Direction.Start)
-        (point, direction, maze.path(point))
+        val startPos = Position(head._1, Direction.Start)
+        val position = changeDirection(maze, startPos)
+        Tile(position, maze.path(position.point))
       case Nil => throw new Exception("No start found")
     }
   }
@@ -68,25 +69,28 @@ object MazeRunner {
     var currentSym = Symbol.fromChar('@')
     var currentDir = Direction.Start
     var currentPoint = Point.fromTuple((0, 0))
+    var currentPos = Position(currentPoint, currentDir)
     Try {
       do {
-        val (point, direction, sym) = next(maze, currentPoint, currentDir)
+        val nextTile = next(maze, currentPos)
+        val sym = nextTile.symbol
         maze.path.get(currentPoint) match {
           case Some(testPoint) =>
-            if (testPoint.value == '+' && direction == currentDir) {
+            if (testPoint.value == '+' && nextTile.position.direction == currentDir) {
               // fake turn, error out
-              throw new Exception(s"Fake turn detected $testPoint[$currentPoint] -> $currentDir => $sym[$point] -> $direction")
+              throw new Exception(s"Fake turn detected ${nextTile.prettyStr}")
             }
           case None =>
         }
         strPath += sym.value
-        if (('A' to 'Z').toList.contains(sym.value) && !letterSet.contains(point)) {
-          letterSet = letterSet ++ Set(point)
+        if (('A' to 'Z').toList.contains(sym.value) && !letterSet.contains(nextTile.position.point)) {
+          letterSet = letterSet ++ Set(nextTile.position.point)
           letters += sym.value
         }
         currentSym = sym
-        currentDir = direction
-        currentPoint = point
+        currentDir = nextTile.position.direction
+        currentPoint = nextTile.position.point
+        currentPos = Position(currentPoint, currentDir)
       }
       while (currentSym.value != 'x')
     } match {
